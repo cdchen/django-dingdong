@@ -36,8 +36,8 @@ setup_requires = [
 dependency_links = [
 ]
 
-license = open('LICENSE.txt').read()
-long_description = open('README.rst').read()
+license = open('LICENSE').read()
+long_description = open('README.md').read()
 
 from setuptools import setup, find_packages
 
