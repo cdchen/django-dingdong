@@ -15,13 +15,12 @@ from .models import (
 logger = get_task_logger('django_dingdong.tasks')
 
 
-@shared_task(bind=True)
+@shared_task(bind=True, ignore_result=True)
 def task_start_notification_send_task(notification_task_id):
     notification_task = NotificationSendTask.objects.get(pk=notification_task_id)
 
-    results = []
-    backend_manager.initial()
-    backends = backend_manager.get_all_backends()
+    backend_manager.prepare()
+    backends = backend_manager.all_backends
     notification_class = notification_task.get_notification_class()
 
     recipients = notification_task.get_recipients()
@@ -40,11 +39,6 @@ def task_start_notification_send_task(notification_task_id):
             continue
 
         notification.update_status(NotificationStatus.SENDING)
-        result = {
-            'notification': notification,
-            'recipient': recipient,
-            'backends': {}
-        }
 
         for backend in backends:
             backend_id = backend.get_backend_id()
@@ -55,15 +49,12 @@ def task_start_notification_send_task(notification_task_id):
             if backend.is_support_notification(notification) is False:
                 continue
 
-            backend_result = backend.send_notification(
+            status = backend.send_notification(
                 notification=notification)
-            result['backends'][backend_id] = backend_result
+            notification.status = status
 
-        results.append(result)
+    backend_manager.done()
 
-    backend_manager.finish()
-
+    # Update `finish_time` when done.
     notification_task.finish_time = now()
     notification_task.save()
-
-    return results

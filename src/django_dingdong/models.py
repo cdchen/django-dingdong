@@ -3,9 +3,9 @@
 # __author__ = 'cdchen'
 #
 import logging
-import six
 import uuid
 
+import six
 from django.contrib.auth import get_user_model
 from django.contrib.contenttypes.models import ContentType
 from django.contrib.contenttypes import generic
@@ -16,7 +16,7 @@ from django.utils.importlib import import_module
 from django.utils.timezone import now
 from django_extensions.db.fields import (
     ShortUUIDField,
-    CreationDateTimeField, UUIDField)
+    CreationDateTimeField)
 from picklefield import PickledObjectField
 from django_enumfield import enum
 from polymorphic import PolymorphicModel

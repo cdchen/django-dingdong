@@ -37,8 +37,6 @@ class EmailBackend(BulkBackend):
 
     def send_all(self):
         notification_count = len(self.notifications)
-        if notification_count == 0:
-            return
 
         if notification_count == 1:
             data = self.convert_to_email_tuple(self.notifications[0])
@@ -48,6 +46,3 @@ class EmailBackend(BulkBackend):
             for notification in self.notifications:
                 data.append(self.convert_to_email_tuple(notification))
             send_mass_mail(data)
-
-        for notification in self.notifications:
-            notification.update_status(NotificationStatus.SENT)

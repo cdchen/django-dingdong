@@ -4,23 +4,32 @@
 #
 import logging
 import six
+import copy
 
 from django.utils.importlib import import_module
+from django.utils.translation import ugettext as _
+from django_dingdong.models import NotificationStatus
 
 
 logger = logging.getLevelName("django_dingdong")
 
+
 class BackendMeta(type):
-    def __init__(cls, what, bases=None, dict=None):
-        backend_id = dict.get('backend_id', None)
+    def __new__(S, name, bases, attrs):
+        backend_id = attrs.pop('backend_id', None)
         if not backend_id:
-            dict['backend_id'] = what
-        return super(BackendMeta, cls).__init__(what, bases, dict)
+            backend_id = name
+        display_name = attrs.pop('display_name', None)
+        if not display_name:
+            display_name = name
+        attrs.update({
+            'backend_id': backend_id.lower(),
+            'display_name': display_name,
+        })
+        return type.__new__(S, name, bases, attrs)
 
 
-class Backend(six.with_metaclass(BackendMeta, object)):
-    backend_id = None
-    display_title = None
+class Backend(six.with_metaclass(BackendMeta)):
 
     def __init__(self, backend_manager):
         self._backend_manager = backend_manager
@@ -29,15 +38,18 @@ class Backend(six.with_metaclass(BackendMeta, object)):
         raise NotImplementedError()
 
     def get_backend_id(self):
+        if not self.backend_id:
+            raise NotImplementedError(
+                _("You must set the 'backend_id' attribute or override this method."))
         return self.backend_id
 
     def is_support_notification(self, notification):
         return True
 
-    def prepare(self):
+    def initial(self):
         pass
 
-    def done(self):
+    def finish(self):
         pass
 
 
@@ -50,13 +62,14 @@ class BulkBackend(Backend):
 
     def send_notification(self, notification):
         self.notifications.append(notification)
-        return 'Queued, waiting for send.'
+        return NotificationStatus.PENDING
 
     def send_all(self):
         raise NotImplementedError()
 
     def done(self):
-        self.send_all()
+        if len(self.notifications) > 0:
+            self.send_all()
 
 
 class BackendManager(object):
@@ -81,14 +94,19 @@ class BackendManager(object):
         self._backend_classes = backends
         self._backends = [cls(self) for cls in backends]
 
-    def get_all_backends(self):
-        return self._backends
+    @property
+    def all_backends(self):
+        return copy.copy(self._backends)
 
-    def initial(self):
-        for backend in self.get_all_backends():
-            backend.prepare()
+    @property
+    def all_backend_id(self):
+        return [b.backend_id for b in self._backends]
 
-    def finish(self):
-        for backend in self.get_all_backends():
-            backend.done()
+    def prepare(self):
+        for backend in self._backends:
+            backend.initial()
+
+    def done(self):
+        for backend in self._backends:
+            backend.finish()
 
