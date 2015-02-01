@@ -28,6 +28,8 @@ install_requires = [
     'django-enumfield',
     'shortuuid',
     'sphinx_rtd_theme',
+    'apns',
+    'python-gcm',
 ]
 
 setup_requires = [

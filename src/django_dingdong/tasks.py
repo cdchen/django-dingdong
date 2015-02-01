@@ -2,7 +2,7 @@
 #
 # __author__ = 'cdchen'
 #
-from celery import shared_task
+from celery import shared_task, Task
 from celery.utils.log import get_task_logger
 from django.utils.timezone import now
 from django_dingdong.backends import backend_manager
@@ -15,46 +15,63 @@ from .models import (
 logger = get_task_logger('django_dingdong.tasks')
 
 
-@shared_task(bind=True, ignore_result=True)
-def task_start_notification_send_task(notification_task_id):
-    notification_task = NotificationSendTask.objects.get(pk=notification_task_id)
+class BaseSendTask(Task):
+    ignore_result = True
 
-    backend_manager.prepare()
-    backends = backend_manager.all_backends
-    notification_class = notification_task.get_notification_class()
+    def get_backends(self):
+        return backend_manager.all_backends
 
-    recipients = notification_task.get_recipients()
-    for recipient in recipients:
-        notify_settings = NotificationUserSetting.objects.get_user_settings(recipient)
-        if notify_settings.get('disable_all_notifications', False) is True:
-            continue
+    def get_recipients(self, notification_task):
+        return notification_task.get_recipients()
 
-        data = notification_task.notification_data or {}
-        notification = notification_class(**data)
-        notification.save()
+    def run(self, notification_task_id):
+        notification_task = NotificationSendTask.objects.get(pk=notification_task_id)
+        backend_manager.prepare()
+        backends = self.get_backends()
+        notification_class = notification_task.get_notification_class()
 
-        notification_type = notification.notification_type
-        if notify_settings.get('disable_%s_notification' % notification_type, False) is True:
-            notification.update_status(NotificationStatus.USER_DISABLED)
-            continue
+        recipients = self.get_recipients(notification_task)
+        for recipient in recipients:
+            notify_settings = NotificationUserSetting.objects.get_user_settings(recipient)
+            if notify_settings.get('disable_all_notifications', False) is True:
+                continue
 
-        notification.update_status(NotificationStatus.SENDING)
+            data = notification_task.notification_data or {}
+            notification = notification_class(**data)
+            notification.save()
 
-        for backend in backends:
-            backend_id = backend.get_backend_id()
-            if notify_settings.get('disable_%s_notification_backend' % backend_id, False) is True:
+            notification_type = notification.notification_type
+            if notify_settings.get('disable_%s_notification' % notification_type, False) is True:
                 notification.update_status(NotificationStatus.USER_DISABLED)
                 continue
 
-            if backend.is_support_notification(notification) is False:
-                continue
+            notification.update_status(NotificationStatus.SENDING)
+            for backend in backends:
+                backend_id = backend.get_backend_id()
+                if notify_settings.get('disable_%s_notification_backend' % backend_id, False) is True:
+                    notification.update_status(NotificationStatus.USER_DISABLED)
+                    continue
 
-            status = backend.send_notification(
-                notification=notification)
-            notification.status = status
+                if backend.is_support_notification(notification) is False:
+                    continue
 
-    backend_manager.done()
+                status = backend.send_notification(notification=notification)
+                notification.update_status(status)
 
-    # Update `finish_time` when done.
-    notification_task.finish_time = now()
-    notification_task.save()
+            notification.update_status(NotificationStatus.SENT)
+
+        # Force send all notifications for every backend.
+        for backend in backends:
+            backend.flush()
+
+        backend_manager.done()
+
+        # Update `finish_time` when done.
+        notification_task.finish_time = now()
+        notification_task.save()
+
+
+@shared_task
+class DefaultNotificationSendTask(BaseSendTask):
+    pass
+

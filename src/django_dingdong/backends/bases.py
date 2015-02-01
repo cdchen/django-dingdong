@@ -52,6 +52,9 @@ class Backend(six.with_metaclass(BackendMeta)):
     def finish(self):
         pass
 
+    def flush(self):
+        pass
+
 
 class SimpleBackend(Backend):
     pass
@@ -64,12 +67,14 @@ class BulkBackend(Backend):
         self.notifications.append(notification)
         return NotificationStatus.PENDING
 
-    def send_all(self):
+    def flush(self):
         raise NotImplementedError()
 
-    def done(self):
-        if len(self.notifications) > 0:
-            self.send_all()
+
+class DummyBackend(BulkBackend):
+    def flush(self):
+        for notification in self.notifications:
+            logger.info("notification=%s", notification)
 
 
 class BackendManager(object):
@@ -101,6 +106,10 @@ class BackendManager(object):
     @property
     def all_backend_id(self):
         return [b.backend_id for b in self._backends]
+
+    @property
+    def all_backend_choices(self):
+        return ((b.backend_id, b.display_name) for b in self._backends)
 
     def prepare(self):
         for backend in self._backends:

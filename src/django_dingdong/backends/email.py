@@ -2,12 +2,15 @@
 #
 # __author__ = 'cdchen'
 #
+import logging
+
 from django.core.mail import send_mail, send_mass_mail
 from django.conf import settings
 
 from .bases import BulkBackend
-from django_dingdong.models import NotificationStatus
 
+
+logger = logging.get('django_dingdong.backends.email')
 
 email_field = getattr(settings, 'DJANGO_DINGDONE_EMAIL_FIELD', 'email')
 email_from = getattr(settings, 'DJANGO_DINGDONE_EMAIL_ADDRESS', None)
@@ -16,8 +19,11 @@ if not email_from:
     email_from = getattr(settings, 'DEFAULT_FROM_EMAIL', None)
 
 
-class EmailBackend(BulkBackend):
+# -------------------------------------------
+# EmailBackend
+# -------------------------------------------
 
+class EmailBackend(BulkBackend):
     def is_support_notification(self, notification):
         if not email_from:
             return False
@@ -29,13 +35,13 @@ class EmailBackend(BulkBackend):
 
     def convert_to_email_tuple(self, notification):
         return (
-            notification.display_title,     # subject
-            unicode(notification),          # body
-            email_from,                     # from
-            notification.recipient.email,   # to
+            notification.display_title,  # subject
+            unicode(notification),  # body
+            email_from,  # from
+            notification.recipient.email,  # to
         )
 
-    def send_all(self):
+    def flush(self):
         notification_count = len(self.notifications)
 
         if notification_count == 1:
