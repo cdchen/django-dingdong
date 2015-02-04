@@ -5,12 +5,17 @@
 # All rights reserved by niceStudio, Inc.
 #
 import logging
+
 from django.conf import settings
+
 from apns import APNs, Payload, Frame
+from gcm import GCM
 
 from .bases import BulkBackend
-from django_dingdong.models import Device, GCMDevice, APNSDevice
-from gcm import GCM
+from django_dingdong.models import (
+    Device,
+    GCMDevice,
+    APNSDevice)
 
 
 logger = logging.getLogger('django_dingdone.backends.mobile')
@@ -26,6 +31,12 @@ class BaseMobileDeviceBackend(BulkBackend):
 
     def is_support_notification(self, notification):
         return self.get_recipient_devices(notification.recipient).exists()
+
+    def is_support_anonymous(self):
+        return True
+
+    def send_anonymous_notification(self, notification, recipients):
+        super(BaseMobileDeviceBackend, self).send_anonymous_notification(notification, recipients)
 
     def flush(self):
         raise NotImplementedError()
@@ -45,11 +56,11 @@ class GCMDeviceBackend(BaseMobileDeviceBackend):
         pass
 
     def flush(self):
-        notification_count = len(self.notifications)
-        if notification_count == 1:
-            pass
-        else:
-            pass
+        for notification in self.notifications:
+            data = self.convert_to_data(notification)
+            devices = GCMDevice.objects.filter(user=notification.recipient)
+            for device in devices:
+                self.gcm.json_request(device.notification_token, data)
 
 
 # -------------------------------------------

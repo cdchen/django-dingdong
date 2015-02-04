@@ -9,7 +9,8 @@ from django_dingdong.backends import backend_manager
 
 from .models import (
     NotificationUserSetting,
-    NotificationStatus, NotificationSendTask)
+    NotificationStatus,
+    NotificationTask)
 
 
 logger = get_task_logger('django_dingdong.tasks')
@@ -25,10 +26,9 @@ class BaseSendTask(Task):
         return notification_task.get_recipients()
 
     def run(self, notification_task_id):
-        notification_task = NotificationSendTask.objects.get(pk=notification_task_id)
+        notification_task = NotificationTask.objects.get(pk=notification_task_id)
         backend_manager.prepare()
         backends = self.get_backends()
-        notification_class = notification_task.get_notification_class()
 
         recipients = self.get_recipients(notification_task)
         for recipient in recipients:
@@ -36,8 +36,7 @@ class BaseSendTask(Task):
             if notify_settings.get('disable_all_notifications', False) is True:
                 continue
 
-            data = notification_task.notification_data or {}
-            notification = notification_class(**data)
+            notification = notification_task.create_notification(recipient)
             notification.save()
 
             notification_type = notification.notification_type
@@ -60,7 +59,14 @@ class BaseSendTask(Task):
 
             notification.update_status(NotificationStatus.SENT)
 
-        # Force send all notifications for every backend.
+        # support anonymous backend.
+        if notification_task.include_anonymous is True:
+            notification = notification_task.create_notification(None)
+            for backend in backends:
+                if backend.is_support_anonymous() is True:
+                    backend.send_anonymous_notification(notification, recipients)
+
+        # Force flush all notifications for every backend.
         for backend in backends:
             backend.flush()
 

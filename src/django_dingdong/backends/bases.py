@@ -46,6 +46,12 @@ class Backend(six.with_metaclass(BackendMeta)):
     def is_support_notification(self, notification):
         return True
 
+    def is_support_anonymous(self):
+        return False
+
+    def send_anonymous_notification(self, notification, recipients):
+        pass
+
     def initial(self):
         pass
 

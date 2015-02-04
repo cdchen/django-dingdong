@@ -4,6 +4,7 @@
 #
 import logging
 import re
+import copy
 
 import six
 from django.contrib.auth import get_user_model
@@ -27,10 +28,10 @@ logger = logging.getLevelName("django_dingdong")
 User = get_user_model()
 
 # -------------------------------------------
-# NotificationSendTask
+# NotificationTask
 # -------------------------------------------
 
-class NotificationSendTask(models.Model):
+class NotificationTask(models.Model):
     id = UUIDField(
         primary_key=True,
     )
@@ -47,6 +48,11 @@ class NotificationSendTask(models.Model):
 
     recipients_id_list = PickledObjectField(
 
+    )
+
+    include_anonymous = models.BooleanField(
+        default=False,
+        db_index=True,
     )
 
     create_time = CreationDateTimeField(
@@ -80,6 +86,17 @@ class NotificationSendTask(models.Model):
             return User.objects.filter(pk__in=recipients)
         return User.objects.none()
 
+    def create_notification(self, recipient):
+        notification_class = self.get_notification_class()
+        assert notification_class is not None
+
+        data = copy.copy(self.notification_data or {})
+        data.update({
+            'recipient': recipient,
+            'task': self,
+        })
+        return notification_class(**data)
+
 
 # ----------------------------------------------
 # Notification
@@ -108,7 +125,7 @@ class Notification(PolymorphicModel):
     )
 
     task = models.ForeignKey(
-        NotificationSendTask,
+        NotificationTask,
         related_name='notifications',
     )
 
@@ -125,6 +142,8 @@ class Notification(PolymorphicModel):
     recipient = models.ForeignKey(
         User,
         related_name='notifications',
+        null=True,
+        blank=True,
     )
 
     display_title = models.CharField(
@@ -173,7 +192,7 @@ class Notification(PolymorphicModel):
     def update_status(self, new_status, save=True):
         if self.status != new_status:
             self.status = new_status
-            if save:
+            if save is True:
                 self.save()
 
     def save(self, *args, **kwargs):
@@ -404,6 +423,8 @@ class Device(PolymorphicModel):
     app_agent = models.CharField(
         max_length=255,
         db_index=True,
+        null=True,
+        blank=True,
     )
 
     create_time = CreationDateTimeField(

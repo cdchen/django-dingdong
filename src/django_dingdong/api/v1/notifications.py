@@ -11,7 +11,7 @@ from django_dingdong.api.v1.serializers import (
     NotificationSerializer,
     ActivityNotificationSerializer,
     SimpleNotificationSerializer,
-    NotificationSendTaskSerializer)
+    NotificationTaskSerializer)
 from django_dingdong.models import (
     ActivityNotification,
     SimpleNotification)
@@ -53,18 +53,18 @@ class NotificationRetrieveAPIView(NotificationAPIViewMixin,
 
 
 # -------------------------------------------
-# NotificationSendTask API Views
+# NotificationTaskSerializer API Views
 # -------------------------------------------
 
-class NotificationSendTaskAPIViewMixin(object):
-    serializer_class = NotificationSendTaskSerializer
+class NotificationTaskAPIViewMixin(object):
+    serializer_class = NotificationTaskSerializer
 
 
-class NotificationSendTaskListAPIView(NotificationSendTaskAPIViewMixin,
-                                      ListAPIView):
+class NotificationTaskListAPIView(NotificationTaskAPIViewMixin,
+                                  ListAPIView):
     pass
 
 
-class NotificationSendTaskRetrieveAPIView(NotificationSendTaskAPIViewMixin,
-                                          RetrieveUpdateAPIView):
+class NotificationTaskRetrieveAPIView(NotificationTaskAPIViewMixin,
+                                      RetrieveUpdateAPIView):
     pass
