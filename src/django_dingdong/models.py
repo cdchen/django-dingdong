@@ -3,7 +3,6 @@
 # __author__ = 'cdchen'
 #
 import logging
-import re
 import copy
 
 import six
@@ -18,7 +17,7 @@ from django.utils.timezone import now
 from django_extensions.db.fields import (
     ShortUUIDField,
     UUIDField,
-    CreationDateTimeField, ModificationDateTimeField)
+    CreationDateTimeField)
 from picklefield import PickledObjectField
 from django_enumfield import enum
 from polymorphic import PolymorphicModel
@@ -346,123 +345,3 @@ class NotificationUserSetting(models.Model):
 
     objects = NotificationUserSettingManager()
 
-
-# -------------------------------------------
-# Device
-# -------------------------------------------
-
-class DeviceType(enum.Enum):
-    UNKNOWN = 0
-    ANDROID = 1
-    IOS = 2
-
-    labels = {
-        UNKNOWN: "Unknown",
-        ANDROID: "Android",
-        IOS: "iOS",
-    }
-
-
-class Device(PolymorphicModel):
-    id = models.CharField(
-        max_length=64,
-        primary_key=True,
-    )
-
-    user = models.ForeignKey(
-        User,
-        null=True,
-        blank=True,
-    )
-
-    name = models.CharField(
-        max_length=255,
-        db_index=True,
-        null=True,
-        blank=True,
-    )
-
-    os_name = models.CharField(
-        max_length=255,
-        db_index=True,
-    )
-
-    os_version = models.CharField(
-        max_length=64,
-        db_index=True,
-    )
-
-    vendor = models.CharField(
-        max_length=255,
-        db_index=True,
-        null=True,
-        blank=True,
-    )
-
-    model = models.CharField(
-        max_length=255,
-        db_index=True,
-        null=True,
-        blank=True,
-    )
-
-    model_no = models.CharField(
-        max_length=255,
-        db_index=True,
-        null=True,
-        blank=True,
-    )
-
-    notification_token = models.CharField(
-        max_length=255,
-        db_index=True,
-        null=True,
-        blank=True,
-    )
-
-    app_agent = models.CharField(
-        max_length=255,
-        db_index=True,
-        null=True,
-        blank=True,
-    )
-
-    create_time = CreationDateTimeField(
-        db_index=True,
-    )
-
-    modify_time = ModificationDateTimeField(
-        db_index=True,
-    )
-
-    def get_device_type(self):
-        raise NotImplementedError()
-
-    def __str__(self):
-        return '%s (%s:%s:%s)' % (
-            self.name,
-            self.id,
-            self.os_name,
-            self.os_version,
-        )
-
-    def get_app_agent_info(self):
-        if self.app_agent:
-            values = re.split("\s+", self.app_agent)
-            if len(values) >= 3:
-                return {
-                    'name': values[0],
-                    'version': values[1],
-                    'release': values[2],
-                }
-        return {}
-
-
-class GCMDevice(Device):
-    def get_device_type(self):
-        return DeviceType.ANDROID
-
-
-class APNSDevice(Device):
-    def get_device_type(self):
-        return DeviceType.IOS

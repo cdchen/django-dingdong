@@ -12,29 +12,31 @@ else:
 
 user_table_name = "%s.%s" % (User._meta.app_label, User._meta.object_name)
 
+
 class Migration(SchemaMigration):
 
     def forwards(self, orm):
-        # Adding model 'NotificationSendTask'
-        db.create_table(u'django_dingdong_notificationsendtask', (
-            ('id', self.gf('django.db.models.fields.CharField')(max_length=64, primary_key=True)),
+        # Adding model 'NotificationTask'
+        db.create_table(u'django_dingdong_notificationtask', (
+            ('id', self.gf('django.db.models.fields.CharField')(max_length=36, primary_key=True)),
             ('notification_class', self.gf('django.db.models.fields.CharField')(max_length=255, db_index=True)),
             ('notification_data', self.gf('picklefield.fields.PickledObjectField')(null=True, blank=True)),
             ('recipients_id_list', self.gf('picklefield.fields.PickledObjectField')()),
+            ('include_anonymous', self.gf('django.db.models.fields.BooleanField')(default=False, db_index=True)),
             ('create_time', self.gf('django.db.models.fields.DateTimeField')(default=datetime.datetime.now, db_index=True, blank=True)),
             ('start_time', self.gf('django.db.models.fields.DateTimeField')(db_index=True, null=True, blank=True)),
             ('finish_time', self.gf('django.db.models.fields.DateTimeField')(db_index=True, null=True, blank=True)),
         ))
-        db.send_create_signal(u'django_dingdong', ['NotificationSendTask'])
+        db.send_create_signal(u'django_dingdong', ['NotificationTask'])
 
         # Adding model 'Notification'
         db.create_table(u'django_dingdong_notification', (
             ('polymorphic_ctype', self.gf('django.db.models.fields.related.ForeignKey')(related_name=u'polymorphic_django_dingdong.notification_set', null=True, to=orm['contenttypes.ContentType'])),
             ('id', self.gf('django.db.models.fields.CharField')(max_length=22, primary_key=True)),
-            ('task', self.gf('django.db.models.fields.related.ForeignKey')(related_name='notifications', to=orm['django_dingdong.NotificationSendTask'])),
+            ('task', self.gf('django.db.models.fields.related.ForeignKey')(related_name='notifications', to=orm['django_dingdong.NotificationTask'])),
             ('level', self.gf('django.db.models.fields.IntegerField')(default=0)),
             ('notification_type', self.gf('django.db.models.fields.CharField')(default='default', max_length=255, db_index=True)),
-            ('recipient', self.gf('django.db.models.fields.related.ForeignKey')(related_name='notifications', to=orm[user_table_name])),
+            ('recipient', self.gf('django.db.models.fields.related.ForeignKey')(blank=True, related_name='notifications', null=True, to=orm[user_table_name])),
             ('display_title', self.gf('django.db.models.fields.CharField')(max_length=255, null=True, blank=True)),
             ('description', self.gf('django.db.models.fields.TextField')(null=True, blank=True)),
             ('status', self.gf('django.db.models.fields.IntegerField')(default=0, db_index=True)),
@@ -83,8 +85,8 @@ class Migration(SchemaMigration):
         # Removing unique constraint on 'NotificationUserSetting', fields ['user', 'name']
         db.delete_unique(u'django_dingdong_notificationusersetting', ['user_id', 'name'])
 
-        # Deleting model 'NotificationSendTask'
-        db.delete_table(u'django_dingdong_notificationsendtask')
+        # Deleting model 'NotificationTask'
+        db.delete_table(u'django_dingdong_notificationtask')
 
         # Deleting model 'Notification'
         db.delete_table(u'django_dingdong_notification')
@@ -144,15 +146,16 @@ class Migration(SchemaMigration):
             'priority': ('django.db.models.fields.SmallIntegerField', [], {'default': '0', 'null': 'True', 'db_index': 'True', 'blank': 'True'}),
             'public': ('django.db.models.fields.BooleanField', [], {'default': 'True', 'db_index': 'True'}),
             'read_time': ('django.db.models.fields.DateTimeField', [], {'db_index': 'True', 'null': 'True', 'blank': 'True'}),
-            'recipient': ('django.db.models.fields.related.ForeignKey', [], {'related_name': "'notifications'", 'to': u"orm['ech_users.User']"}),
+            'recipient': ('django.db.models.fields.related.ForeignKey', [], {'blank': 'True', 'related_name': "'notifications'", 'null': 'True', 'to': u"orm['ech_users.User']"}),
             'status': ('django.db.models.fields.IntegerField', [], {'default': '0', 'db_index': 'True'}),
-            'task': ('django.db.models.fields.related.ForeignKey', [], {'related_name': "'notifications'", 'to': u"orm['django_dingdong.NotificationSendTask']"})
+            'task': ('django.db.models.fields.related.ForeignKey', [], {'related_name': "'notifications'", 'to': u"orm['django_dingdong.NotificationTask']"})
         },
-        u'django_dingdong.notificationsendtask': {
-            'Meta': {'object_name': 'NotificationSendTask'},
+        u'django_dingdong.notificationtask': {
+            'Meta': {'object_name': 'NotificationTask'},
             'create_time': ('django.db.models.fields.DateTimeField', [], {'default': 'datetime.datetime.now', 'db_index': 'True', 'blank': 'True'}),
             'finish_time': ('django.db.models.fields.DateTimeField', [], {'db_index': 'True', 'null': 'True', 'blank': 'True'}),
-            'id': ('django.db.models.fields.CharField', [], {'max_length': '64', 'primary_key': 'True'}),
+            'id': ('django.db.models.fields.CharField', [], {'max_length': '36', 'primary_key': 'True'}),
+            'include_anonymous': ('django.db.models.fields.BooleanField', [], {'default': 'False', 'db_index': 'True'}),
             'notification_class': ('django.db.models.fields.CharField', [], {'max_length': '255', 'db_index': 'True'}),
             'notification_data': ('picklefield.fields.PickledObjectField', [], {'null': 'True', 'blank': 'True'}),
             'recipients_id_list': ('picklefield.fields.PickledObjectField', [], {}),
