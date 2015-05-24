@@ -6,7 +6,7 @@ import logging
 import copy
 
 import six
-from django.contrib.auth import get_user_model
+from django.conf import settings
 from django.contrib.contenttypes.models import ContentType
 from django.contrib.contenttypes import generic
 from django.db import (
@@ -24,7 +24,6 @@ from polymorphic import PolymorphicModel
 
 
 logger = logging.getLevelName("django_dingdong")
-User = get_user_model()
 
 # -------------------------------------------
 # NotificationTask
@@ -78,6 +77,9 @@ class NotificationTask(models.Model):
         return None
 
     def get_recipients(self):
+        from django.contrib.auth import get_user_model
+
+        User = get_user_model()
         if self.recipients_id_list:
             recipients = self.recipients_id_list
             if isinstance(self.recipients_id_list, six.string_types):
@@ -139,7 +141,7 @@ class Notification(PolymorphicModel):
     )
 
     recipient = models.ForeignKey(
-        User,
+        settings.AUTH_USER_MODEL,
         related_name='notifications',
         null=True,
         blank=True,
@@ -329,7 +331,7 @@ class NotificationUserSetting(models.Model):
     )
 
     user = models.ForeignKey(
-        User,
+        settings.AUTH_USER_MODEL,
         related_name='notification_settings',
     )
 
