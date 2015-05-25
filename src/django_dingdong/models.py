@@ -3,49 +3,85 @@
 # __author__ = 'cdchen'
 #
 import logging
-import copy
 
-import six
+from actstream.models import Action
 from django.conf import settings
 from django.contrib.contenttypes.models import ContentType
-from django.contrib.contenttypes import generic
 from django.db import (
     models,
     transaction)
-from django.utils.importlib import import_module
-from django.utils.timezone import now
 from django_extensions.db.fields import (
     ShortUUIDField,
     UUIDField,
     CreationDateTimeField)
+from jsonfield import JSONField
 from picklefield import PickledObjectField
 from django_enumfield import enum
-from polymorphic import PolymorphicModel
+from polymorphic import PolymorphicModel, PolymorphicManager
 
 
-logger = logging.getLevelName("django_dingdong")
+logger = logging.getLevelName("django_dingdong.models")
+
 
 # -------------------------------------------
-# NotificationTask
+# Notification Task
 # -------------------------------------------
+
+class NotificationTaskError(Exception):
+    pass
+
+
+class NotificationTaskStatus(enum.Enum):
+    NEW = 0
+    PENDING = 1
+    START = 64
+    FINISH = 65
+
+
+class NotificationTaskManager(models.Manager):
+    def create_task(self, notification_class, notification_data, recipients, notification_type=None,
+                    include_anonymous=False, eta_time=None):
+        if not issubclass(notification_class, Notification):
+            raise ValueError("'notification_class' must be sub class of 'Notification'")
+
+        content_type = ContentType.objects.get_for_model(notification_class)
+
+        recipient_list = [recipient.pk for recipient in recipients]
+        if not recipient_list:
+            raise ValueError("'recipients' can not be empty.")
+
+        notification_data = notification_data or {}
+        if notification_type:
+            notification_data['notification_type'] = notification_type
+
+        instance = self.model(
+            notification_class=content_type,
+            notification_data=notification_data,
+            recipient_list=recipient_list,
+            include_anonymous=include_anonymous,
+            eta_time=eta_time)
+
+        instance.save()
+        return instance
+
 
 class NotificationTask(models.Model):
     id = UUIDField(
         primary_key=True,
     )
 
-    notification_class = models.CharField(
-        max_length=255,
-        db_index=True,
+    notification_class = models.ForeignKey(
+        ContentType,
     )
 
-    notification_data = PickledObjectField(
+    notification_data = JSONField(
+        default={},
         null=True,
         blank=True,
     )
 
-    recipients_id_list = PickledObjectField(
-
+    recipient_list = JSONField(
+        default=[],
     )
 
     include_anonymous = models.BooleanField(
@@ -53,7 +89,18 @@ class NotificationTask(models.Model):
         db_index=True,
     )
 
+    status = enum.EnumField(
+        NotificationTaskStatus,
+        db_index=True,
+    )
+
     create_time = CreationDateTimeField(
+        db_index=True,
+    )
+
+    eta_time = models.DateTimeField(
+        null=True,
+        blank=True,
         db_index=True,
     )
 
@@ -69,69 +116,47 @@ class NotificationTask(models.Model):
         db_index=True,
     )
 
-    def get_notification_class(self):
-        if self.notification_class:
-            module_name, klass_name = self.notification_class.split(':')
-            module = import_module(module_name)
-            return getattr(module, klass_name)
-        return None
+    objects = NotificationTaskManager()
 
-    def get_recipients(self):
-        from django.contrib.auth import get_user_model
-
-        User = get_user_model()
-        if self.recipients_id_list:
-            recipients = self.recipients_id_list
-            if isinstance(self.recipients_id_list, six.string_types):
-                recipients = self.recipients_id_list.split()
-            return User.objects.filter(pk__in=recipients)
-        return User.objects.none()
-
-    def create_notification(self, recipient):
-        notification_class = self.get_notification_class()
-        assert notification_class is not None
-
-        data = copy.copy(self.notification_data or {})
-        data.update({
-            'recipient': recipient,
-            'task': self,
-        })
-        return notification_class(**data)
+    def create_notification(self, save=True, **kwargs):
+        klass = self.notification_class.model_class()
+        data = self.notification_data or {}
+        data.update(kwargs)
+        instance = klass(**data)
+        if save:
+            instance.save()
+        return instance
 
 
-# ----------------------------------------------
+# -------------------------------------------
 # Notification
-# ----------------------------------------------
-
-class NotificationLevel(enum.Enum):
-    DEBUG = 0
-    INFO = 1
-    NOTICE = 2
-    WARNING = 3
-    ERROR = 4
-
+# -------------------------------------------
 
 class NotificationStatus(enum.Enum):
     NEW = 0
-    USER_DISABLED = 1
-    SENDING = 64
-    PENDING = 65
-    SENT = 128
+    PREPARE = 1
+    NOT_SUPPORT = 2
+    USER_DISABLE = 3
+    SENDING = 32
+    SENT = 64
+    UNREAD = 255
     READ = 256
 
 
+class NotificationManager(PolymorphicManager):
+    def for_user(self, user):
+        if user.is_anonymous():
+            return self.get_queryset().filter(recipient=None)
+        return self.get_queryset().filter(recipient=user)
+
+
 class Notification(PolymorphicModel):
-    id = ShortUUIDField(
+    id = UUIDField(
         primary_key=True,
     )
 
     task = models.ForeignKey(
         NotificationTask,
-        related_name='notifications',
-    )
-
-    level = enum.EnumField(
-        NotificationLevel,
     )
 
     notification_type = models.CharField(
@@ -142,28 +167,18 @@ class Notification(PolymorphicModel):
 
     recipient = models.ForeignKey(
         settings.AUTH_USER_MODEL,
-        related_name='notifications',
-        null=True,
-        blank=True,
-    )
-
-    display_title = models.CharField(
-        max_length=255,
-        null=True,
-        blank=True,
-    )
-
-    description = models.TextField(
-        blank=True,
-        null=True
-    )
-
-    status = enum.EnumField(
-        NotificationStatus,
         db_index=True,
+        null=True,
+        blank=True,
     )
 
     create_time = CreationDateTimeField(
+        db_index=True,
+    )
+
+    sent_time = models.DateTimeField(
+        null=True,
+        blank=True,
         db_index=True,
     )
 
@@ -173,39 +188,38 @@ class Notification(PolymorphicModel):
         db_index=True,
     )
 
-    public = models.BooleanField(
-        default=True,
-        db_index=True,
-    )
-
-    extra_data = PickledObjectField(
+    result = JSONField(
         null=True,
         blank=True,
     )
 
-    priority = models.SmallIntegerField(
-        default=0,
-        db_index=True,
-        blank=True,
-        null=True,
-    )
+    objects = NotificationManager()
 
-    def update_status(self, new_status, save=True):
-        if self.status != new_status:
-            self.status = new_status
-            if save is True:
-                self.save()
+    def set_status(self, status, save=True):
+        if self.status != status:
+            self.status = status
+            if save:
+                self.save(update_fields=['status'])
 
-    def save(self, *args, **kwargs):
+    def mark_unread(self):
         if self.status == NotificationStatus.READ:
-            if self.read_time is None:
-                self.read_time = now()
-        else:
-            self.read_time = None
-        return super(Notification, self).save(*args, **kwargs)
+            self.set_status(NotificationStatus.UNREAD)
+
+    def mark_read(self):
+        if self.recipient and self.status != NotificationStatus.READ:
+            self.set_status(NotificationStatus.READ)
 
     def get_display_content(self):
         return self.__unicode__()
+
+    def render_display_content(self, **context):
+        context.update({
+            'recipient': self.recipient
+        })
+        display_content = self.get_display_content()
+        if display_content:
+            return display_content.format(**context)
+        return display_content
 
 
 class SimpleNotification(Notification):
@@ -214,64 +228,17 @@ class SimpleNotification(Notification):
         blank=True,
     )
 
-    def __unicode__(self):
-        return self.display_content
+    def get_display_content(self):
+        return self.display_content or ''
 
 
-class ActivityNotification(Notification):
-    actor_content_type = models.ForeignKey(
-        ContentType,
-        related_name='notify_actors'
+class ActionNotification(Notification):
+    action = models.ForeignKey(
+        Action,
     )
 
-    actor_object_id = models.CharField(
-        max_length=255
-    )
-
-    actor = generic.GenericForeignKey(
-        'actor_content_type',
-        'actor_object_id'
-    )
-
-    verb = models.CharField(
-        max_length=255
-    )
-
-    target_content_type = models.ForeignKey(
-        ContentType,
-        related_name='notify_targets',
-        blank=True,
-        null=True
-    )
-
-    target_object_id = models.CharField(
-        max_length=255,
-        blank=True,
-        null=True
-    )
-
-    target = generic.GenericForeignKey(
-        'target_content_type',
-        'target_object_id'
-    )
-
-    action_object_content_type = models.ForeignKey(
-        ContentType,
-        related_name='notify_action_objects',
-        blank=True,
-        null=True
-    )
-
-    action_object_object_id = models.CharField(
-        max_length=255,
-        blank=True,
-        null=True
-    )
-
-    action_object = generic.GenericForeignKey(
-        'action_object_content_type',
-        'action_object_object_id'
-    )
+    def get_display_content(self):
+        return self.action.__unicode__() if self.action else ''
 
 
 # ----------------------------------------------
@@ -346,4 +313,3 @@ class NotificationUserSetting(models.Model):
     )
 
     objects = NotificationUserSettingManager()
-

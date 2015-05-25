@@ -3,15 +3,16 @@
 # __author__ = 'cdchen'
 #
 import logging
+from django.contrib.auth import get_user_model
 
 from django.core.exceptions import PermissionDenied
 from django.views.generic import (
     ListView, DetailView)
 
-from .models import User
-
 
 logger = logging.getLevelName('django_dingdong.views')
+
+User = get_user_model()
 
 
 class BaseNotificationViewMixin(object):
@@ -20,10 +21,7 @@ class BaseNotificationViewMixin(object):
         return qs.filter(recipient=self.user)
 
     def get_user(self):
-        kwargs = {
-            User.USERNAME_FIELD: self.kwargs.get('username'),
-        }
-        return User.objects.get(**kwargs)
+        return self.request.user
 
 
 class NotificationViewMixin(BaseNotificationViewMixin):

@@ -6,17 +6,13 @@ import logging
 
 from rest_framework.generics import (
     ListAPIView, RetrieveUpdateAPIView)
-
 from django_dingdong.api.v1.serializers import (
     NotificationSerializer,
-    ActivityNotificationSerializer,
     SimpleNotificationSerializer,
-    NotificationTaskSerializer)
+    ActionNotificationSerializer)
 from django_dingdong.models import (
-    ActivityNotification,
-    SimpleNotification)
+    SimpleNotification, ActionNotification)
 from django_dingdong.views import BaseNotificationViewMixin
-
 
 logger = logging.getLevelName("django_dingdong.api")
 
@@ -35,8 +31,8 @@ class NotificationAPIViewMixin(BaseNotificationViewMixin):
     def get_serializer(self, instance=None, *args, **kwargs):
         serializer_class = {
             SimpleNotification: SimpleNotificationSerializer,
-            ActivityNotification: ActivityNotificationSerializer,
-        }.get(instance.__class__, NotificationSerializer)
+            ActionNotification: ActionNotificationSerializer,
+        }.get(type(instance), NotificationSerializer)
         context = self.get_serializer_context()
         return serializer_class(
             instance=instance, context=context, *args, **kwargs)
@@ -49,22 +45,4 @@ class NotificationListAPIView(NotificationAPIViewMixin,
 
 class NotificationRetrieveAPIView(NotificationAPIViewMixin,
                                   RetrieveUpdateAPIView):
-    pass
-
-
-# -------------------------------------------
-# NotificationTaskSerializer API Views
-# -------------------------------------------
-
-class NotificationTaskAPIViewMixin(object):
-    serializer_class = NotificationTaskSerializer
-
-
-class NotificationTaskListAPIView(NotificationTaskAPIViewMixin,
-                                  ListAPIView):
-    pass
-
-
-class NotificationTaskRetrieveAPIView(NotificationTaskAPIViewMixin,
-                                      RetrieveUpdateAPIView):
     pass

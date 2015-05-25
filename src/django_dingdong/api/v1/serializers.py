@@ -8,10 +8,9 @@ from rest_framework import serializers
 
 from django_dingdong.models import (
     Notification,
-    ActivityNotification,
     SimpleNotification,
-    NotificationTask
-)
+    NotificationTask,
+    ActionNotification)
 
 
 logger = logging.getLevelName("django_dingdong.api")
@@ -27,9 +26,9 @@ class SimpleNotificationSerializer(NotificationSerializer):
         model = SimpleNotification
 
 
-class ActivityNotificationSerializer(NotificationSerializer):
+class ActionNotificationSerializer(NotificationSerializer):
     class Meta(NotificationSerializer.Meta):
-        model = ActivityNotification
+        model = ActionNotification
 
 
 class NotificationTaskSerializer(serializers.ModelSerializer):
