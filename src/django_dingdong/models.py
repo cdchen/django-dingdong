@@ -10,6 +10,7 @@ from django.contrib.contenttypes.models import ContentType
 from django.db import (
     models,
     transaction)
+from django.utils.timezone import now
 from django_extensions.db.fields import (
     ShortUUIDField,
     UUIDField,
@@ -203,10 +204,12 @@ class Notification(PolymorphicModel):
 
     def mark_unread(self):
         if self.status == NotificationStatus.READ:
+            self.read_time = None
             self.set_status(NotificationStatus.UNREAD)
 
     def mark_read(self):
         if self.recipient and self.status != NotificationStatus.READ:
+            self.read_time = now()
             self.set_status(NotificationStatus.READ)
 
     def get_display_content(self):
