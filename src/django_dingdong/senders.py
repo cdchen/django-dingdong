@@ -10,8 +10,8 @@ import six
 
 from apns import Payload, APNs
 from django.conf import settings
-from django.utils.importlib import import_module
 from django_dingdong.models import NotificationStatus
+from django_dingdong.utils import import_object
 from gcm import GCM
 from django.core.mail import send_mail
 
@@ -163,9 +163,7 @@ class SenderFactory(six.with_metaclass(Singleton)):
         sender_classes = getattr(settings, 'DINGDONG_SENDER_CLASSES', [])
         senders = []
         for klass in sender_classes:
-            module_name, klass = klass.split(":")
-            module_name = import_module(module_name)
-            klass = getattr(module_name, klass)
+            klass = import_object(klass)
             senders.append(klass)
         self.sender_classes = senders
 

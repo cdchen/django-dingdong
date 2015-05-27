@@ -10,7 +10,7 @@ from django_dingdong.senders import SenderFactory
 from .models import (
     NotificationUserSetting,
     NotificationStatus,
-    NotificationTask)
+    NotificationTask, NotificationTaskStatus)
 
 logger = get_task_logger('django_dingdong.tasks')
 
@@ -28,6 +28,10 @@ class BaseSendTask(Task):
 
     def run(self, notification_task_id):
         notification_task = NotificationTask.objects.get(pk=notification_task_id)
+        notification_task.start_time = now()
+        notification_task.status = NotificationTaskStatus.START
+        notification_task.save()
+
         senders = self.get_senders()
 
         for sender in senders:
@@ -87,6 +91,7 @@ class BaseSendTask(Task):
 
         # Update `finish_time` when done.
         notification_task.finish_time = now()
+        notification_task.status = NotificationTaskStatus.FINISH
         notification_task.save()
 
 

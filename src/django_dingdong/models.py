@@ -6,11 +6,13 @@ import logging
 
 from actstream.models import Action
 from django.conf import settings
+from django.contrib.auth import get_user_model
 from django.contrib.contenttypes.models import ContentType
 from django.db import (
     models,
     transaction)
 from django.utils.timezone import now
+from django_dingdong.utils import import_object
 from django_extensions.db.fields import (
     ShortUUIDField,
     UUIDField,
@@ -42,6 +44,25 @@ class NotificationTaskStatus(enum.Enum):
 class NotificationTaskManager(models.Manager):
     def create_task(self, notification_class, notification_data, recipients, notification_type=None,
                     include_anonymous=False, eta_time=None):
+        '''
+        Create and return notification task instance.
+
+        :param notification_class: The class of notification.
+
+        :param notification_data: The data for creating notification instance.
+        :type notification_data: dict or None
+
+        :param recipients: The recipients.
+        :type recipients: iterable.
+
+        :param notification_type: The type of notification.
+        :type notification_type: str
+
+        :param include_anonymous:
+        :param eta_time:
+
+        :return: The new instance of notification task.
+        '''
         if not issubclass(notification_class, Notification):
             raise ValueError("'notification_class' must be sub class of 'Notification'")
 
@@ -95,6 +116,13 @@ class NotificationTask(models.Model):
         db_index=True,
     )
 
+    task_class = models.CharField(
+        max_length=255,
+        db_index=True,
+        null=True,
+        blank=True,
+    )
+
     create_time = CreationDateTimeField(
         db_index=True,
     )
@@ -128,6 +156,35 @@ class NotificationTask(models.Model):
             instance.save()
         return instance
 
+    def get_recipients(self):
+        User = get_user_model()
+        if not self.recipient_list:
+            return User.objects.none()
+        if self.recipient_list == '__all__':
+            return User.objects.all()
+        return User.objects.filter(id__in=self.recipient_list)
+
+    def get_task_class(self):
+        task_class = self.task_class or 'django_dingdong.tasks:DefaultNotificationSendTask'
+        task_class = import_object(task_class)
+        return task_class
+
+    def publish(self, task_class, force=False):
+        if self.status == NotificationTaskStatus.START and not force:
+            # TODO raise Exception for notify caller the task is published.
+            raise
+
+        self.status = NotificationTaskStatus.PENDING
+        self.save()
+
+        kwargs = {
+            'notification_task_id': self.pk,
+            'task_id': self.pk,
+        }
+        if self.eta_time:
+            kwargs['eta'] = self.eta_time
+        return task_class.apply_async(**kwargs)
+
 
 # -------------------------------------------
 # Notification
@@ -156,10 +213,6 @@ class Notification(PolymorphicModel):
         primary_key=True,
     )
 
-    task = models.ForeignKey(
-        NotificationTask,
-    )
-
     notification_type = models.CharField(
         max_length=255,
         db_index=True,
@@ -171,6 +224,11 @@ class Notification(PolymorphicModel):
         db_index=True,
         null=True,
         blank=True,
+    )
+
+    status = enum.EnumField(
+        NotificationStatus,
+        db_index=True,
     )
 
     create_time = CreationDateTimeField(
@@ -216,11 +274,11 @@ class Notification(PolymorphicModel):
         return self.__unicode__()
 
     def render_display_content(self, **context):
-        context.update({
-            'recipient': self.recipient
-        })
         display_content = self.get_display_content()
         if display_content:
+            context.update({
+                'recipient': self.recipient
+            })
             return display_content.format(**context)
         return display_content
 
